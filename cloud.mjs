@@ -1,6 +1,6 @@
 // Only a public API key enters the webpage. The per-session token never enters exports.
 export class CloudStore {
-  constructor(config,kind,onStatus){this.config=config;this.kind=kind;this.onStatus=onStatus;this.key=`chiir-cloud-token-v1:${kind}`;this.pending=null;this.busy=false;this.timer=null;this.confirmed=null;this.stopped=false;}
+  constructor(config,kind,onStatus){this.config=config;this.kind=kind;this.onStatus=onStatus;this.key=`chiir-cloud-token-v2:${kind}`;this.pending=null;this.busy=false;this.timer=null;this.confirmed=null;this.stopped=false;}
   credential(){
     let token=localStorage.getItem(this.key);
     if(!token){token=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');localStorage.setItem(this.key,token);}
@@ -12,7 +12,7 @@ export class CloudStore {
     if(!response.ok){const e=Error(body.message||'Cloud save failed');e.status=response.status;throw e;}
     return body;
   }
-  async start(experience){return this.rpc('chiir_start_session',{p_token:this.credential(),p_kind:this.kind,p_experience:experience,p_consent:'chiir-consent-01'});}
+  async start(experience,platformId){return this.rpc('chiir_start_session',{p_token:this.credential(),p_kind:this.kind,p_experience:experience,p_consent:'chiir-consent-02',p_platform_id:platformId});}
   async resume(){const token=localStorage.getItem(this.key);return token?this.rpc('chiir_resume_session',{p_token:token}):null;}
   queue(record,immediate=false){
     this.pending=structuredClone(record);this.onStatus({state:'pending',record});

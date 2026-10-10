@@ -17,25 +17,29 @@ create table if not exists public.chiir_sessions (
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   completed_at timestamptz
 );
+alter table public.chiir_sessions add column if not exists platform_id text;
+create unique index if not exists chiir_study_platform_id on public.chiir_sessions(platform_id) where data_kind='study';
 create unique index if not exists chiir_study_participant on public.chiir_sessions(participant) where data_kind='study';
 alter table public.chiir_settings enable row level security;
 alter table public.chiir_plan enable row level security;
 alter table public.chiir_sessions enable row level security;
 revoke all on public.chiir_settings, public.chiir_plan, public.chiir_sessions from anon, authenticated;
 
-create or replace function public.chiir_start_session(p_token text,p_kind text,p_experience text,p_consent text)
+drop function if exists public.chiir_start_session(text,text,text,text);
+create or replace function public.chiir_start_session(p_token text,p_kind text,p_experience text,p_consent text,p_platform_id text)
 returns jsonb language plpgsql security definer set search_path='' as $$
 declare s public.chiir_sessions%rowtype; chosen text;
 begin
   if p_token is null or p_token !~ '^[0-9a-f]{64}$' or p_kind is null or p_kind not in ('study','software-test')
-    or p_experience is null or p_experience not in ('yes','no') or p_consent is distinct from 'chiir-consent-01'
+    or p_experience is null or p_experience not in ('yes','no') or p_consent is distinct from 'chiir-consent-02' or p_platform_id is null or p_platform_id !~ '^[A-Za-z0-9_-]{1,40}$'
     then raise exception 'invalid session request'; end if;
   perform pg_advisory_xact_lock(2026101140);
   select * into s from public.chiir_sessions where token_hash=extensions.digest(p_token,'sha256');
   if found then
-    if s.data_kind<>p_kind or s.experience<>p_experience then raise exception 'session mismatch'; end if;
+    if s.data_kind<>p_kind or s.experience<>p_experience or s.platform_id is distinct from p_platform_id then raise exception 'session mismatch'; end if;
   else
     if p_kind='study' then
+      if exists(select 1 from public.chiir_sessions where data_kind='study' and platform_id=p_platform_id) then raise exception 'platform participant already used'; end if;
       if not (select study_open from public.chiir_settings where id) then raise exception 'study not open'; end if;
       select p.participant into chosen from public.chiir_plan p where not exists
         (select 1 from public.chiir_sessions r where r.participant=p.participant and r.data_kind='study') order by p.ordinal limit 1;
@@ -44,11 +48,11 @@ begin
         ((select count(*) from public.chiir_sessions where data_kind='software-test') % 36) limit 1;
     end if;
     if chosen is null then raise exception 'study allocation full'; end if;
-    insert into public.chiir_sessions(token_hash,participant,data_kind,experience,consent_version)
-      values(extensions.digest(p_token,'sha256'),chosen,p_kind,p_experience,p_consent) returning * into s;
+    insert into public.chiir_sessions(token_hash,participant,data_kind,experience,consent_version,platform_id)
+      values(extensions.digest(p_token,'sha256'),chosen,p_kind,p_experience,p_consent,p_platform_id) returning * into s;
   end if;
   return jsonb_build_object('sessionId',s.session_id,'participant',s.participant,'record',s.record,'revision',s.revision,
-    'experience',s.experience,'dataKind',s.data_kind,'consentVersion',s.consent_version,'consentAt',s.consent_at);
+    'experience',s.experience,'dataKind',s.data_kind,'consentVersion',s.consent_version,'consentAt',s.consent_at,'platformId',s.platform_id,'platformTaskId','202610118100');
 end $$;
 
 create or replace function public.chiir_resume_session(p_token text)
@@ -59,7 +63,7 @@ begin
   select * into s from public.chiir_sessions where token_hash=extensions.digest(p_token,'sha256');
   if not found then return null; end if;
   return jsonb_build_object('sessionId',s.session_id,'participant',s.participant,'record',s.record,'revision',s.revision,
-    'experience',s.experience,'dataKind',s.data_kind,'consentVersion',s.consent_version,'consentAt',s.consent_at);
+    'experience',s.experience,'dataKind',s.data_kind,'consentVersion',s.consent_version,'consentAt',s.consent_at,'platformId',s.platform_id,'platformTaskId','202610118100');
 end $$;
 
 create or replace function public.chiir_save_record(p_token text,p_record jsonb)
@@ -74,6 +78,7 @@ begin
   select canonical into plan from public.chiir_plan where participant=s.participant;
   if p_record->>'sessionId' is distinct from s.session_id::text or p_record->>'participant' is distinct from s.participant
     or p_record->>'dataKind' is distinct from s.data_kind or p_record#>>'{profile,birdExperience}' is distinct from s.experience
+    or p_record->>'platformId' is distinct from s.platform_id or p_record->>'platformTaskId' is distinct from '202610118100'
     or p_record->>'consentVersion' is distinct from s.consent_version
     or p_record->'allocation' is distinct from plan->'allocation' or p_record->'schedule' is distinct from plan->'schedule'
     or p_record->'recallIds' is distinct from plan->'recallIds' or p_record->'version' is distinct from plan->'version'
@@ -151,6 +156,6 @@ begin
     completed_at=case when phase='complete' then coalesce(s.completed_at,now()) else null end where session_id=s.session_id;
   return jsonb_build_object('revision',v_revision,'rows',n,'complete',phase='complete');
 end $$;
-revoke all on function public.chiir_start_session(text,text,text,text),public.chiir_resume_session(text),public.chiir_save_record(text,jsonb) from public,anon,authenticated;
-grant execute on function public.chiir_start_session(text,text,text,text),public.chiir_resume_session(text),public.chiir_save_record(text,jsonb) to anon;
+revoke all on function public.chiir_start_session(text,text,text,text,text),public.chiir_resume_session(text),public.chiir_save_record(text,jsonb) from public,anon,authenticated;
+grant execute on function public.chiir_start_session(text,text,text,text,text),public.chiir_resume_session(text),public.chiir_save_record(text,jsonb) to anon;
 commit;
