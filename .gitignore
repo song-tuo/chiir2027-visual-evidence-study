@@ -1,0 +1,6 @@
+private/
+researcher_only/
+.env*
+*.pem
+.DS_Store
+node_modules/
