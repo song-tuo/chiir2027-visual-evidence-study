@@ -82,7 +82,7 @@ begin
     or p_record->>'consentVersion' is distinct from s.consent_version
     or p_record->'allocation' is distinct from plan->'allocation' or p_record->'schedule' is distinct from plan->'schedule'
     or p_record->'recallIds' is distinct from plan->'recallIds' or p_record->'version' is distinct from plan->'version'
-    or not coalesce(p_record->>'uiRevision' in ('formal-three-huixiang-04','formal-three-huixiang-05'),false) or p_record->'materialSha' is distinct from plan->'materialSha'
+    or not coalesce(p_record->>'uiRevision' in ('formal-three-huixiang-04','formal-three-huixiang-05','formal-three-huixiang-06'),false) or p_record->'materialSha' is distinct from plan->'materialSha'
     or p_record->>'responseFormat' is distinct from 'binary-plus-confidence7'
     or p_record->>'timingDefinition' is distinct from 'available-images-ready-to-submit;whole-trial'
     or p_record ? 'previewSeededRows' then raise exception 'record identity mismatch'; end if;
@@ -123,7 +123,7 @@ begin
     r=p_record->'rows'->i;t=plan->'schedule'->i;
     if r->>'participant' is distinct from s.participant or r->>'session_id' is distinct from s.session_id::text
       or r->>'data_kind' is distinct from s.data_kind or r->'app_version' is distinct from plan->'version'
-      or not coalesce(r->>'ui_revision' in ('formal-three-huixiang-04','formal-three-huixiang-05'),false) or r->'material_sha' is distinct from plan->'materialSha'
+      or not coalesce(r->>'ui_revision' in ('formal-three-huixiang-04','formal-three-huixiang-05','formal-three-huixiang-06'),false) or r->'material_sha' is distinct from plan->'materialSha'
       or r->'item_id' is distinct from t->'id' or r->'layout' is distinct from t->'layout'
       or r->'set_id' is distinct from t->'set_id' or r->'block_index' is distinct from t->'block_index'
       or r->'trial_type' is distinct from t->'kind' or (r->>'position')::integer is distinct from i+1
