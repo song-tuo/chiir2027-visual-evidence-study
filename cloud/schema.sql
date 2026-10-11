@@ -45,7 +45,7 @@ begin
         (select 1 from public.chiir_sessions r where r.participant=p.participant and r.data_kind='study') order by p.ordinal limit 1;
     else
       select participant into chosen from public.chiir_plan order by ordinal offset
-        ((select count(*) from public.chiir_sessions where data_kind='software-test') % 36) limit 1;
+        ((select count(*) from public.chiir_sessions where data_kind='software-test') % (select count(*) from public.chiir_plan)) limit 1;
     end if;
     if chosen is null then raise exception 'study allocation full'; end if;
     insert into public.chiir_sessions(token_hash,participant,data_kind,experience,consent_version,platform_id)
@@ -82,7 +82,7 @@ begin
     or p_record->>'consentVersion' is distinct from s.consent_version
     or p_record->'allocation' is distinct from plan->'allocation' or p_record->'schedule' is distinct from plan->'schedule'
     or p_record->'recallIds' is distinct from plan->'recallIds' or p_record->'version' is distinct from plan->'version'
-    or not coalesce(p_record->>'uiRevision' in ('formal-three-huixiang-04','formal-three-huixiang-05','formal-three-huixiang-06','formal-three-huixiang-07'),false) or p_record->'materialSha' is distinct from plan->'materialSha'
+    or not coalesce(p_record->>'uiRevision' in ('formal-three-huixiang-04','formal-three-huixiang-05','formal-three-huixiang-06','formal-three-huixiang-07','formal-three-huixiang-08'),false) or p_record->'materialSha' is distinct from plan->'materialSha'
     or p_record->>'responseFormat' is distinct from 'binary-plus-confidence7'
     or p_record->>'timingDefinition' is distinct from 'available-images-ready-to-submit;whole-trial'
     or p_record ? 'previewSeededRows' then raise exception 'record identity mismatch'; end if;
@@ -101,7 +101,7 @@ begin
     or ((p_record->>'completedAt' is not null)<>(phase='complete')) then raise exception 'invalid phase'; end if;
   if p_record ? 'recallPolicy' and p_record->>'recallPolicy' is distinct from 'required-text-3' then raise exception 'invalid recall policy'; end if;
   if s.record->>'recallPolicy'='required-text-3' and p_record->>'recallPolicy' is distinct from 'required-text-3' then raise exception 'recall policy changed'; end if;
-  if s.record is null and p_record->>'uiRevision'='formal-three-huixiang-07' and p_record->>'recallPolicy' is distinct from 'required-text-3' then raise exception 'invalid recall policy'; end if;
+  if s.record is null and p_record->>'uiRevision' in ('formal-three-huixiang-07','formal-three-huixiang-08') and p_record->>'recallPolicy' is distinct from 'required-text-3' then raise exception 'invalid recall policy'; end if;
   if v_revision<=s.revision then
     if v_revision=s.revision and p_record=s.record then
       return jsonb_build_object('revision',s.revision,'rows',n,'complete',s.completed_at is not null);
@@ -126,7 +126,7 @@ begin
     r=p_record->'rows'->i;t=plan->'schedule'->i;
     if r->>'participant' is distinct from s.participant or r->>'session_id' is distinct from s.session_id::text
       or r->>'data_kind' is distinct from s.data_kind or r->'app_version' is distinct from plan->'version'
-      or not coalesce(r->>'ui_revision' in ('formal-three-huixiang-04','formal-three-huixiang-05','formal-three-huixiang-06','formal-three-huixiang-07'),false) or r->'material_sha' is distinct from plan->'materialSha'
+      or not coalesce(r->>'ui_revision' in ('formal-three-huixiang-04','formal-three-huixiang-05','formal-three-huixiang-06','formal-three-huixiang-07','formal-three-huixiang-08'),false) or r->'material_sha' is distinct from plan->'materialSha'
       or r->'item_id' is distinct from t->'id' or r->'layout' is distinct from t->'layout'
       or r->'set_id' is distinct from t->'set_id' or r->'block_index' is distinct from t->'block_index'
       or r->'trial_type' is distinct from t->'kind' or (r->>'position')::integer is distinct from i+1
@@ -154,7 +154,7 @@ begin
     if r->'item_id' is distinct from plan->'recallIds'->i or jsonb_typeof(r->'basis') is distinct from 'string'
       or length(r->>'basis')>600 or jsonb_typeof(r->'skipped') is distinct from 'boolean'
       or jsonb_typeof(r->'cannotRecall') is distinct from 'boolean' then raise exception 'invalid recall'; end if;
-    if (p_record->>'recallPolicy'='required-text-3' or (p_record->>'uiRevision'='formal-three-huixiang-07' and i>=coalesce(jsonb_array_length(s.record->'recalls'),0)))
+    if (p_record->>'recallPolicy'='required-text-3' or (p_record->>'uiRevision' in ('formal-three-huixiang-07','formal-three-huixiang-08') and i>=coalesce(jsonb_array_length(s.record->'recalls'),0)))
       and (r->'skipped' is distinct from 'false'::jsonb or not coalesce(r->>'basis' ~ '[^[:space:]　]',false)) then raise exception 'invalid recall: answer required'; end if;
   end loop;
   update public.chiir_sessions set record=p_record,revision=v_revision,updated_at=now(),
