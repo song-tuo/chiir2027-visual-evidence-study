@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>作答连接检查</title>
+<style>body{max-width:640px;margin:56px auto;padding:0 24px;font:16px/1.7 system-ui,sans-serif;color:#173c32;background:#fafbf9}h1{font-size:27px}button,a{font:inherit}button{background:#205d48;color:white;border:0;border-radius:6px;padding:10px 20px;cursor:pointer}button:disabled{opacity:.55}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;border:1px solid #ccd7d1;border-radius:8px;padding:20px;color:#25372e}a{color:#205d48}small{color:#52635b}</style></head>
+<body><h1>作答连接检查</h1><p>请在出现问题的电脑和浏览器中打开本页。检查完成后，把下方结果截图发给研究者。</p><p><small>本页不开始实验、不占名额、不读取已有答案或回响用户ID。</small></p><button id="check">重新检查</button><pre id="result" role="status">正在检查…</pre><p><a href="./">返回实验页面</a></p>
+<script id="cloud-config" type="application/json">__CLOUD_CONFIG__</script>
+<script>
+(function(){
+var result=document.getElementById('result'),button=document.getElementById('check');
+function run(){
+  button.disabled=true;
+  var rows=['连接检查 connection-01',new Date().toISOString(),'网页：已打开'];
+  var features={fetch:typeof fetch==='function',AbortController:typeof AbortController==='function',structuredClone:typeof structuredClone==='function',arrayAt:typeof Array.prototype.at==='function',secureRandom:!!(window.crypto&&crypto.getRandomValues),AbortSignalTimeout:typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'};
+  try{var key='chiir-connection-probe:'+Date.now();localStorage.setItem(key,'1');if(localStorage.getItem(key)!=='1')throw Error();localStorage.removeItem(key);rows.push('本机存储：可用');}catch(e){rows.push('本机存储：不可用（STORAGE）');}
+  var missing=Object.keys(features).filter(function(k){return k!=='AbortSignalTimeout'&&!features[k];});
+  rows.push('浏览器功能：'+(missing.length?'缺少 '+missing.join('、'):'可用'));
+  rows.push('旧版超时接口：'+(features.AbortSignalTimeout?'支持':'不支持；新版连接代码已兼容'));
+  try{var last=JSON.parse(sessionStorage.getItem('chiir-last-start-error')||'null');if(last&&typeof last.code==='string'&&/^[A-Z_0-9-]{1,40}$/.test(last.code))rows.push('最近开始作答错误：'+last.code);}catch(e){}
+  rows.push('浏览器：'+navigator.userAgent);
+  function finish(line){rows.push(line);result.textContent=rows.join('\n');button.disabled=false;}
+  result.textContent=rows.concat('数据服务：检查中（最多 15 秒）…').join('\n');
+  if(!features.fetch||!features.AbortController){finish('数据服务：未检查，浏览器缺少连接功能（BROWSER）');return;}
+  var config=JSON.parse(document.getElementById('cloud-config').textContent),controller=new AbortController(),timedOut=false,started=Date.now();
+  var timer=setTimeout(function(){timedOut=true;controller.abort();},15000);
+  // A fixed nonexistent token only reads the resume endpoint; it creates no session.
+  fetch(config.url+'/rest/v1/rpc/chiir_resume_session',{method:'POST',headers:{apikey:config.publishableKey,'Content-Type':'application/json'},body:JSON.stringify({p_token:'0000000000000000000000000000000000000000000000000000000000000000'}),signal:controller.signal})
+    .then(function(response){if(!response.ok){var error=Error('SERVER');error.status=response.status;throw error;}return response.json();})
+    .then(function(body){finish(body===null?'数据服务：连接成功（'+(Date.now()-started)+' 毫秒）。请返回原实验页刷新后重试。':'数据服务：响应异常（RESPONSE），请将结果发给研究者。');})
+    .catch(function(error){finish(timedOut?'数据服务：连接超时（TIMEOUT）。请将结果发给研究者。':error.status?'数据服务：返回 HTTP '+error.status+'（SERVER）。请将结果发给研究者。':error instanceof SyntaxError?'数据服务：响应格式异常（RESPONSE）。请将结果发给研究者。':'数据服务：请求失败（NETWORK），浏览器未提供具体网络原因。请将结果发给研究者。');})
+    .then(function(){clearTimeout(timer);});
+}
+button.onclick=run;run();
+})();
+</script></body></html>
